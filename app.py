@@ -1,76 +1,79 @@
 import streamlit as st
 import pandas as pd
-import pickle
+import joblib
 
-# ── Configuración de página ──
-st.set_page_config(page_title="Predictor de Depósito", page_icon="🏦", layout="wide")
+# 1. Configuración de la página
+st.set_page_config(page_title="Predicción de subscripción", page_icon="🏦", layout="wide")
+st.title("Simulador de subscripción a producto bancario")
+st.markdown("Introduce los datos del cliente para predecir si contratará el producto bancario.")
 
-# ── Carga del modelo ──
+# 2. Cargar el modelo guardado
 @st.cache_resource
 def load_model():
-    with open("bank_ALL/bank_12.pkl", "rb") as f:
-        return pickle.load(f)
+    return joblib.load('modelo_final.joblib')
 
-try:
-    modelo = load_model()
-    model_loaded = True
-except FileNotFoundError:
-    model_loaded = False
+modelo = load_model()
 
-# ── Funciones de transformación ──
-def pdays_transform(x): return 0 if x == -1 else 1
-
-def bin_pdays(x):
-    if x == -1: return 0
-    if x < 100: return 1
-    if x < 200: return 2
-    if x < 400: return 3
-    return 4
-
-# ── Interfaz web ──
-st.title("Predictor de Suscripción a Depósito Bancario")
-
-if not model_loaded:
-    st.error("No se encontró el modelo 'bank_12.pkl' en esta carpeta.")
-    st.stop()
-
+# 3. Crear el formulario de entrada organizado en 3 columnas
+st.subheader("Datos del Cliente")
 col1, col2, col3 = st.columns(3)
 
 with col1:
-    age = st.number_input("Edad", 18, 95, 40)
-    job = st.selectbox("Ocupación", ["admin.", "blue-collar", "entrepreneur", "housemaid", "management", "retired", "self-employed", "services", "student", "technician", "unemployed", "unknown"])
-    marital = st.selectbox("Estado civil", ["married", "single", "divorced"])
-    education = st.selectbox("Nivel educativo", ["primary", "secondary", "tertiary", "unknown"])
-    default = st.selectbox("¿Tiene crédito en mora?", ["no", "yes"])
-    balance = st.number_input("Saldo medio anual (€)", -10000, 100000, 1500)
+    age = st.number_input("Edad (age)", min_value=18, max_value=100, value=38)
+    job = st.selectbox("Trabajo (job)", ['management', 'technician', 'entrepreneur', 'blue-collar', 'unknown', 'retired', 'admin.', 'services', 'self-employed', 'unemployed', 'housemaid', 'student'])
+    marital = st.selectbox("Estado Civil (marital)", ['married', 'single', 'divorced'])
+    education = st.selectbox("Educación (education)", ['tertiary', 'secondary', 'primary', 'unknown'])
+    default = st.selectbox("¿Tiene crédito en mora? (default)", ['no', 'yes'])
+    balance = st.number_input("Saldo Medio Anual (balance)", value=119)
+    
 
 with col2:
-    housing = st.selectbox("¿Tiene hipoteca?", ["yes", "no"])
-    loan = st.selectbox("¿Tiene préstamo personal?", ["no", "yes"])
-    contact = st.selectbox("Tipo de contacto", ["cellular", "telephone", "unknown"])
-    day = st.number_input("Día del último contacto", 1, 31, 15)
-    month = st.selectbox("Mes del último contacto", ["jan", "feb", "mar", "apr", "may", "jun", "jul", "aug", "sep", "oct", "nov", "dec"])
-    duration = st.number_input("Duración llamada (s)", 0, 5000, 200)
+    housing = st.selectbox("¿Tiene hipoteca? (housing)", ['yes', 'no'])
+    loan = st.selectbox("¿Tiene préstamo personal? (loan)", ['no', 'yes'])
+    contact = st.selectbox("Tipo de contacto (contact)", ['unknown', 'cellular', 'telephone'])
+    day = st.number_input("Día del mes (day)", min_value=1, max_value=31, value=13)
+    month = st.selectbox("Mes (month)", ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec'])
+    duration = st.number_input("Duración última llamada en seg. (duration)", min_value=0, value=568)
 
 with col3:
-    campaign = st.number_input("Contactos esta campaña", 1, 50, 2)
-    pdays = st.number_input("Días desde último contacto (-1 si no hubo)", -1, 900, -1)
-    previous = st.number_input("Contactos antes de campaña", 0, 60, 0)
-    poutcome = st.selectbox("Resultado campaña anterior", ["unknown", "failure", "other", "success"])
+    campaign = st.number_input("Contactos en esta campaña (campaign)", min_value=1, value=4)
+    previous = st.number_input("Contactos antes de esta campaña (previous)", min_value=0, value=0)
+    poutcome = st.selectbox("Resultado campaña anterior (poutcome)", ['unknown', 'failure', 'other', 'success'])
+    wasContacted = st.selectbox("¿Fue contactado antes? (wasContacted)", [0, 1])
+    contactedLabel = st.selectbox("Categoría de contacto previo (contactedLabel)", [0, 1, 2, 3, 4])
 
-if st.button("🔮 Realizar Predicción", type="primary", use_container_width=True):
-    input_data = pd.DataFrame([{
-        "age": age, "job": job, "marital": marital, "education": education,
-        "default": default, "balance": balance, "housing": housing, "loan": loan,
-        "contact": contact, "day": day, "month": month, "duration": duration,
-        "campaign": campaign, "previous": previous, "poutcome": poutcome,
-        "wasContacted": pdays_transform(pdays), "contactedLabel": bin_pdays(pdays),
-    }])
-
-    prediccion = modelo.predict(input_data)
+# 4. Botón de predicción
+st.markdown("---")
+if st.button("Predecir Contratación", type="primary", use_container_width=True):
     
-    st.divider()
-    if prediccion == "yes":
-        st.success("**Es MUY PROBABLE que el cliente SUSCRIBA el depósito**")
+    # Recopilar todos los datos en un DataFrame con UNA sola fila
+    input_data = pd.DataFrame([{
+        'age': age,
+        'job': job,
+        'marital': marital,
+        'education': education,
+        'balance': balance,
+        'default': default,
+        'housing': housing,
+        'loan': loan,
+        'contact': contact,
+        'day': day,
+        'month': month,
+        'duration': duration,
+        'campaign': campaign,
+        'previous': previous,
+        'poutcome': poutcome,
+        'wasContacted': wasContacted,
+        'contactedLabel': contactedLabel
+    }])
+    
+    # Hacer la predicción
+    prediccion = modelo.predict(input_data)[0]
+    
+    # Mostrar el resultado a lo grande
+    st.subheader("Resultado de la Predicción:")
+    if prediccion == 'yes':
+        st.success("¡El cliente SÍ contratará el producto! (Predicción: 'yes')")
+        st.balloons()
     else:
-        st.error("**Es POCO PROBABLE que el cliente suscriba el depósito**")
+        st.error("El cliente NO contratará el producto. (Predicción: 'no')")
